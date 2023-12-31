@@ -6,14 +6,36 @@ class Chill
   NUM_PAGE = 50
   MAX_PLAYLISTS = 1000
   NUM_RESULTS = 20
+
   QUERY = 'chill'
-  PLAYLISTS_FILE = 'playlists.dump'
+  SOFOLOFO_PLAYLIST = '0LEDGhTTunLvL5PnjinBAz'
+
   PLAYLISTS_CSV = 'playlists.csv'
+  COMMON_CSV = 'common_tracks.csv'
+  SOFOLOFO_CSV = 'sofolofo.csv'
+
+  SOFOLOFO_SUMMARY = 'sofolofo_summary.txt'
+
+  PLAYLISTS_FILE = 'playlists.dump'
   TRACKS_FILE = 'tracks.dump'
   COMMON_FILE = 'common.dump'
-  COMMON_CSV = 'common_tracks.csv'
+  SOFOLOFO_FILE = 'sofolofo.dump'
+  THOUSAND_FILE = 'thousand.dump'
+
+  FEATURES_KEYS = %w(acousticness danceability energy instrumentalness speechiness valence)
+  ANALYSIS_KEYS = %w(duration loudness tempo time_signature key mode)
+  MODE_KEYS = %(time_signature key mode)
+  ALL_KEYS = FEATURES_KEYS + ANALYSIS_KEYS
 
   Track = Struct.new(:id, :name, :album, :artists, :playlist_id, :url)
+
+  TrackWithFeatures = Struct.new(:id, :name, :album, :artists, :playlist_id, :url, :features) do
+    def fetch_analysis!
+      feats = RSpotify.get("audio-features/#{id}").slice(*FEATURES_KEYS)
+      analysis = RSpotify.get("audio-analysis/#{id}")['track'].slice(*ANALYSIS_KEYS)
+      self.features = feats.merge(analysis)
+    end
+  end
 
   def initialize
     raise 'pls export CLIENT_ID AND CLIENT_SECRET to env' unless ENV['CLIENT_ID'] && ENV['CLIENT_SECRET']
@@ -89,6 +111,7 @@ class Chill
   def export
     export_playlists
     export_common
+    export_analysis(sofolofo_tracks, SOFOLOFO_CSV, SOFOLOFO_SUMMARY)
   end
 
   def dump(file, data)
@@ -98,6 +121,62 @@ class Chill
   def load(file)
     Marshal.load(File.binread(file))
   end
+
+  def process_sofolofo_tracks
+    RSpotify::Playlist.find_by_id(SOFOLOFO_PLAYLIST).tracks.map.with_index do |track, i|
+      t = TrackWithFeatures.new(
+        track.id,
+        track.name,
+        track.album.name,
+        track.artists.map(&:name).join(', '),
+        SOFOLOFO_PLAYLIST,
+        track.external_urls['spotify']
+      )
+
+      puts "Processing sofolofo track #{i}"
+      t.fetch_analysis!
+      t
+    end
+  end
+
+  def sofolofo_tracks
+    dump(SOFOLOFO_FILE, process_sofolofo_tracks) unless File.exist?(SOFOLOFO_FILE)
+    @sofolofo_tracks ||= load(SOFOLOFO_FILE)
+  end
+
+  def mean(arr)
+    arr.sum / arr.size.to_f
+  end
+
+  def mode(arr)
+    arr.tally.sort_by { |_, v| v }.last.first
+  end
+
+  def export_analysis(tracks, csv_file, summary_file)
+    CSV.open(csv_file, 'w') do |csv|
+      csv << %w(track_id name album artists url) + ALL_KEYS
+
+      tracks.map do |t|
+        row = [t.id, t.name, t.album, t.artists, t.url]
+        ALL_KEYS.each { |k| row << t.features[k] }
+        csv << row
+      end
+    end
+
+    File.open(summary_file, 'w') do |f|
+      f.puts "Statistics for #{tracks.size} tracks"
+      f.puts ""
+
+      ALL_KEYS.each do |k|
+        vals = tracks.map { |t| t.features[k] }
+        stat = MODE_KEYS.include?(k) ? mode(vals) : mean(vals)
+        f.puts "#{k}: #{stat}"
+      end
+    end
+  end
+
 end
 
-Chill.new.export
+c = Chill.new
+c.export
+debugger

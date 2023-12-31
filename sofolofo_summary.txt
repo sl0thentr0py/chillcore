@@ -1,0 +1,14 @@
+Statistics for 50 tracks
+
+acousticness: 0.6019353199999999
+danceability: 0.5345
+energy: 0.44142200000000004
+instrumentalness: 0.5182217459999999
+speechiness: 0.057482
+valence: 0.393246
+duration: 202.5891096
+loudness: -12.57772
+tempo: 115.7633
+time_signature: 4
+key: 9
+mode: 0
