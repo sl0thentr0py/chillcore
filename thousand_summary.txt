@@ -1,0 +1,14 @@
+Statistics for 822 tracks
+
+acousticness: 0.42862489967153283
+danceability: 0.6398625304136253
+energy: 0.5116267639902676
+instrumentalness: 0.15946871209245744
+speechiness: 0.09965012165450123
+valence: 0.38638807785888074
+duration: 205.9113818978102
+loudness: -8.975126520681265
+tempo: 115.73083819951337
+time_signature: 4
+key: 0
+mode: 1

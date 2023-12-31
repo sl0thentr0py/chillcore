@@ -13,8 +13,10 @@ class Chill
   PLAYLISTS_CSV = 'playlists.csv'
   COMMON_CSV = 'common_tracks.csv'
   SOFOLOFO_CSV = 'sofolofo.csv'
+  THOUSAND_CSV = 'thousand.csv'
 
   SOFOLOFO_SUMMARY = 'sofolofo_summary.txt'
+  THOUSAND_SUMMARY = 'thousand_summary.txt'
 
   PLAYLISTS_FILE = 'playlists.dump'
   TRACKS_FILE = 'tracks.dump'
@@ -112,6 +114,7 @@ class Chill
     export_playlists
     export_common
     export_analysis(sofolofo_tracks, SOFOLOFO_CSV, SOFOLOFO_SUMMARY)
+    export_analysis(thousand_tracks, THOUSAND_CSV, THOUSAND_SUMMARY)
   end
 
   def dump(file, data)
@@ -144,6 +147,36 @@ class Chill
     @sofolofo_tracks ||= load(SOFOLOFO_FILE)
   end
 
+  def process_thousand_tracks
+    tracks.group_by(&:id).
+      select { |_, v| v.size > 1 }.
+      sort_by { |_, v| -v.size }.
+      take(1000).map(&:last).map(&:first).map.with_index do |track, i|
+        t = TrackWithFeatures.new(
+          track.id,
+          track.name,
+          track.album,
+          track.artists,
+          track.playlist_id,
+          track.url
+        )
+
+        begin
+          puts "Processing thousand track #{i}"
+          t.fetch_analysis!
+        rescue
+          puts "analysis fetch failed for track #{i}"
+        end
+
+        t
+      end
+  end
+
+  def thousand_tracks
+    dump(THOUSAND_FILE, process_thousand_tracks) unless File.exist?(THOUSAND_FILE)
+    @thousand_tracks ||= load(THOUSAND_FILE)
+  end
+
   def mean(arr)
     arr.sum / arr.size.to_f
   end
@@ -155,6 +188,8 @@ class Chill
   def export_analysis(tracks, csv_file, summary_file)
     CSV.open(csv_file, 'w') do |csv|
       csv << %w(track_id name album artists url) + ALL_KEYS
+
+      tracks = tracks.reject { |t| t.features.nil? }
 
       tracks.map do |t|
         row = [t.id, t.name, t.album, t.artists, t.url]
@@ -174,9 +209,7 @@ class Chill
       end
     end
   end
-
 end
 
 c = Chill.new
 c.export
-debugger
